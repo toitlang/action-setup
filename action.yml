@@ -1,0 +1,101 @@
+name: "Setup Toit"
+description: "A GitHub Action to set up Toit."
+
+inputs:
+  toit-version:
+    description: "The version to install. Installs the latest version if not specified."
+    default: "latest"
+
+outputs:
+  toit-url:
+    description: "The URL to the Toit tar.gz file."
+    value: ${{ steps.setup_constants.outputs.TOIT_URL }}
+  toit-install-dir:
+    description: "The directory where Toit is installed."
+    value: ${{ steps.tmp-dir.outputs.TOIT_INSTALL_DIR }}
+  toit-version:
+    description: "The version of Toit installed."
+    value: ${{ steps.toit_version.outputs.TOIT_VERSION }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup constants
+      shell: bash
+      id: setup_constants
+      run: |
+        TOIT_VERSION=${{ inputs.toit-version }}
+
+        if [[ "$RUNNER_OS" = "Linux" ]]; then
+          TOIT_FILE=toit-linux.tar.gz
+        elif [[ "$RUNNER_OS" = "macOS" ]]; then
+          TOIT_FILE=toit-macos.tar.gz
+        elif [[ "$RUNNER_OS" = "Windows" ]]; then
+          TOIT_FILE=toit-windows.tar.gz
+        else
+          echo "UNSUPPORTED RUNNER: $RUNNER_OS"
+          exit 1
+        fi
+        if [[ $TOIT_VERSION = latest ]]; then
+          echo "TOIT_URL=https://github.com/toitlang/toit/releases/latest/download/$TOIT_FILE" >> $GITHUB_OUTPUT
+        else
+          echo "TOIT_URL=https://github.com/toitlang/toit/releases/download/$TOIT_VERSION/$TOIT_FILE" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Create temporary directory
+      # Linux and macOS.
+      if: startsWith(runner.os, 'Linux') || startsWith(runner.os, 'macOS')
+      shell: bash
+      run: |
+        INSTALL_DIR=$(mktemp -d)
+        echo "TOIT_INSTALL_DIR=$INSTALL_DIR" >> $GITHUB_ENV
+
+    - name: Create temporary directory
+      # Windows.
+      if: startsWith(runner.os, 'Windows')
+      shell: powershell
+      run: |
+        $tempDir = New-TemporaryFile | % { $_.DirectoryName }
+        echo "TOIT_INSTALL_DIR=$tempDir" | Out-File -FilePath $env:GITHUB_ENV -Append
+        echo "Temp directory is $tempDir"
+
+    - name: Output tmp-dir
+      shell: bash
+      id: tmp-dir
+      run: |
+        echo TOIT_INSTALL_DIR=$TOIT_INSTALL_DIR >> $GITHUB_OUTPUT
+
+
+    - name: Download Toit
+      uses: suisei-cn/actions-download-file@v1.3.0
+      with:
+        url: ${{ steps.setup_constants.outputs.TOIT_URL }}
+        target: ${{ steps.tmp-dir.outputs.TOIT_INSTALL_DIR }}
+
+    - name: Extract Toit
+      shell: bash
+      run: |
+        cd '${{ steps.tmp-dir.outputs.TOIT_INSTALL_DIR }}'
+        # Extracts the tar.gz leaving a 'toit' directory containing 'bin', 'tools' and 'lib' directory.
+        tar x -zf toit-*.tar.gz
+
+    - name: Add to Path
+      # Linux and macOS.
+      if : startsWith(runner.os, 'Linux') || startsWith(runner.os, 'macOS')
+      shell: bash
+      run: |
+        echo "${{ steps.tmp-dir.outputs.TOIT_INSTALL_DIR }}/toit/bin" >> $GITHUB_PATH
+
+    - name: Add to Path
+      # Windows.
+      shell: powershell
+      if: startsWith(runner.os, 'Windows')
+      run: |
+        echo "${{ steps.tmp-dir.outputs.TOIT_INSTALL_DIR }}/toit/bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+
+    - name: Set Toit version output
+      id: toit_version
+      shell: bash
+      run: |
+        cd '${{ steps.tmp-dir.outputs.TOIT_INSTALL_DIR }}'
+        echo "TOIT_VERSION=$(cat toit/VERSION)" >> $GITHUB_OUTPUT
