@@ -1,5 +1,8 @@
 name: "Setup Toit"
 description: "A GitHub Action to set up Toit."
+branding:
+  icon: "play-circle"
+  color: "yellow"
 
 inputs:
   toit-version:
