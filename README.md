@@ -12,7 +12,7 @@ steps:
 
 - uses: toitlang/action-setup@v1
   with:
-    toit-version: '2.0.0-alpha.120'
+    toit-version: 'v2.0.0-alpha.120'
 
 - run: toit.run main.toit
 ```
