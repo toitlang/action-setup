@@ -10,7 +10,7 @@ See [action.yml](action.yml) for a complete list of options and outputs.
 steps:
 - uses: actions/checkout@v4
 
-- uses: toitware/action-setup@v1
+- uses: toitlang/action-setup@v1
   with:
     toit-version: '2.0.0-alpha.120'
 

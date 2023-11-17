@@ -57,9 +57,9 @@ runs:
       run: |
         $tempDir = New-TemporaryFile | % { $_.DirectoryName }
         echo "TOIT_INSTALL_DIR=$tempDir" | Out-File -FilePath $env:GITHUB_ENV -Append
-        echo "Temp directory is $tempDir"
+        echo "Temporary directory is $tempDir"
 
-    - name: Output tmp-dir
+    - name: Output temporary directory
       shell: bash
       id: tmp-dir
       run: |
@@ -79,14 +79,14 @@ runs:
         # Extracts the tar.gz leaving a 'toit' directory containing 'bin', 'tools' and 'lib' directory.
         tar x -zf toit-*.tar.gz
 
-    - name: Add to Path
+    - name: Add to PATH
       # Linux and macOS.
       if : startsWith(runner.os, 'Linux') || startsWith(runner.os, 'macOS')
       shell: bash
       run: |
         echo "${{ steps.tmp-dir.outputs.TOIT_INSTALL_DIR }}/toit/bin" >> $GITHUB_PATH
 
-    - name: Add to Path
+    - name: Add to PATH
       # Windows.
       shell: powershell
       if: startsWith(runner.os, 'Windows')
