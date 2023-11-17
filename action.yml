@@ -65,7 +65,6 @@ runs:
       run: |
         echo TOIT_INSTALL_DIR=$TOIT_INSTALL_DIR >> $GITHUB_OUTPUT
 
-
     - name: Download Toit
       uses: suisei-cn/actions-download-file@v1.3.0
       with:
