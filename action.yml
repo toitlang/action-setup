@@ -16,6 +16,9 @@ outputs:
   toit-install-dir:
     description: "The directory where Toit is installed."
     value: ${{ steps.tmp-dir.outputs.TOIT_INSTALL_DIR }}
+  toit-sdk-path:
+    description: "The path to the Toit SDK."
+    value: ${{ steps.tmp-dir.outputs.TOIT_INSTALL_DIR }}/toit
   toit-version:
     description: "The version of Toit installed."
     value: ${{ steps.toit_version.outputs.TOIT_VERSION }}
