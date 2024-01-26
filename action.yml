@@ -42,6 +42,8 @@ runs:
           echo "UNSUPPORTED RUNNER: $RUNNER_OS"
           exit 1
         fi
+        echo "TOIT_FILE=$TOIT_FILE" >> $GITHUB_OUTPUT
+
         if [[ $TOIT_VERSION = latest ]]; then
           echo "TOIT_URL=https://github.com/toitlang/toit/releases/latest/download/$TOIT_FILE" >> $GITHUB_OUTPUT
         else
@@ -72,10 +74,11 @@ runs:
         echo TOIT_INSTALL_DIR=$TOIT_INSTALL_DIR >> $GITHUB_OUTPUT
 
     - name: Download Toit
-      uses: suisei-cn/actions-download-file@v1.3.0
-      with:
-        url: ${{ steps.setup_constants.outputs.TOIT_URL }}
-        target: ${{ steps.tmp-dir.outputs.TOIT_INSTALL_DIR }}
+      shell: bash
+      run: |
+        cd '${{ steps.tmp-dir.outputs.TOIT_INSTALL_DIR }}'
+        # Downloads the tar.gz file.
+        curl -L -o ${{ steps.setup_constants.outputs.TOIT_FILE }} ${{ steps.setup_constants.outputs.TOIT_URL }}
 
     - name: Extract Toit
       shell: bash
