@@ -103,4 +103,5 @@ runs:
       shell: bash
       run: |
         cd '${{ steps.tmp-dir.outputs.TOIT_INSTALL_DIR }}'
-        echo "TOIT_VERSION=$(cat toit/VERSION)" >> $GITHUB_OUTPUT
+        # We use 'sed' as some version files had a trailing space.
+        echo "TOIT_VERSION=$(sed 's/ $//' toit/VERSION)" >> $GITHUB_OUTPUT
