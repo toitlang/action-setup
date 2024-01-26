@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - "*"
+      - "*/*"
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        version: [v2.0.0-alpha.130, latest, ""]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup with version argument
+        id: setup1
+        if: ${{ matrix.version != '' }}
+        uses: ./
+        with:
+          toit-version: v2.0.0-alpha.130
+
+      - name: Setup without version argument
+        id: setup2
+        if: ${{ matrix.version == '' }}
+        uses: ./
+
+      - name: Test Toit in Path
+        shell: bash
+        run: |
+          toit.run --version
+          toit.pkg --version
+
+      - name: Test Toit in Path - native shell
+        run: |
+          toit.run --version
+          toit.pkg --version
+
+      - name: Test outputs
+        shell: bash
+        run: |
+          if [[ -z "${{ matrix.version }}" ]]; then
+            echo "No version argument"
+            TOIT_URL="${{ steps.setup2.outputs.toit-url }}"
+            TOIT_DIR="${{ steps.setup2.outputs.toit-install-dir }}"
+            TOIT_SDK="${{ steps.setup2.outputs.toit-sdk-path }}"
+            TOIT_VERSION="${{ steps.setup2.outputs.toit-version }}"
+          else
+            echo "With version argument"
+            TOIT_URL="${{ steps.setup1.outputs.toit-url }}"
+            TOIT_DIR="${{ steps.setup1.outputs.toit-install-dir }}"
+            TOIT_SDK="${{ steps.setup1.outputs.toit-sdk-path }}"
+            TOIT_VERSION="${{ steps.setup1.outputs.toit-version }}"
+          fi
+          if [[ "$TOIT_VERSION" == "" ]]; then
+            echo "No version"
+            exit 1
+          fi
+
+          if [[ "${{ matrix.version }}" != "latest" && "${{ matrix.version }}" != "" ]]; then
+            if [[ "$TOIT_VERSION" != "${{ matrix.version }}" ]]; then
+              echo "Version does not match"
+              exit 1
+            fi
+          fi
+
+          # The install-dir should have a toit directory.
+          if [[ ! -d "$TOIT_DIR/toit" ]]; then
+            echo "Install dir does not exist"
+            exit 1
+          fi
+
+          # The SDK-path is the toit directory.
+          if [[ "$TOIT_SDK" != "$TOIT_DIR/toit" ]]; then
+            echo "SDK path does not match install dir"
+            exit 1
+          fi
+
+          # The URL should be a valid URL.
+          if [[ ! "$TOIT_URL" =~ ^https://.* ]]; then
+            echo "URL is not a valid URL"
+            exit 1
+          fi
