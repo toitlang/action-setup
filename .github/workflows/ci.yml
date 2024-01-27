@@ -24,7 +24,7 @@ jobs:
         if: ${{ matrix.version != '' }}
         uses: ./
         with:
-          toit-version: v2.0.0-alpha.130
+          toit-version: ${{ matrix.version }}
 
       - name: Setup without version argument
         id: setup2
