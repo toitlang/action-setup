@@ -32,11 +32,11 @@ runs:
       run: |
         TOIT_VERSION=${{ inputs.toit-version }}
 
-        ARTIFACT_NAMING_THRESHOLD_VERSION=v2.0.0-alpha.163
+        ASSETS_NAMING_THRESHOLD_VERSION=v2.0.0-alpha.164
 
         # Use sort -V to compare versions.
         if [[ "$TOIT_VERSION" == "latest" ]] || \
-            [[ "$(echo -e "$ARTIFACT_NAMING_THRESHOLD_VERSION\n$TOIT_VERSION" | sort -V | tail -n 1)" == "$TOIT_VERSION" ]]; then
+            [[ "$(echo -e "$ASSETS_NAMING_THRESHOLD_VERSION\n$TOIT_VERSION" | sort -V | tail -n 1)" == "$TOIT_VERSION" ]]; then
           if [[ "$RUNNER_OS" = "Linux" ]]; then
             case "$(uname -m)" in
               x86_64)  TOIT_FILE=toit-linux-x64.tar.gz ;;
