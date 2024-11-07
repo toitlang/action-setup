@@ -32,21 +32,16 @@ runs:
       run: |
         TOIT_VERSION=${{ inputs.toit-version }}
 
-        BETTER_NAME_VERSION=v2.0.0-alpha.163
+        ARTIFACT_NAMING_THRESHOLD_VERSION=v2.0.0-alpha.163
 
         # Use sort -V to compare versions.
-        if [[ "$TOIT_VERSION" == "latest" ]] || [[ "$(echo -e "$BETTER_NAME_VERSION\n$TOIT_VERSION" | sort -V | tail -n 1)" == "$TOIT_VERSION" ]]; then
+        if [[ "$TOIT_VERSION" == "latest" ]] || \
+            [[ "$(echo -e "$ARTIFACT_NAMING_THRESHOLD_VERSION\n$TOIT_VERSION" | sort -V | tail -n 1)" == "$TOIT_VERSION" ]]; then
           if [[ "$RUNNER_OS" = "Linux" ]]; then
             case "$(uname -m)" in
-              x86_64)
-                TOIT_FILE=toit-linux-x64.tar.gz
-                ;;
-              armv7l)
-                TOIT_FILE=toit-linux-armv7.tar.gz
-                ;;
-              aarch64)
-                TOIT_FILE=toit-linux-aarch64.tar.gz
-                ;;
+              x86_64)  TOIT_FILE=toit-linux-x64.tar.gz ;;
+              armv7l)  TOIT_FILE=toit-linux-armv7.tar.gz ;;
+              aarch64) TOIT_FILE=toit-linux-aarch64.tar.gz ;;
               *)
                 echo "UNSUPPORTED ARCHITECTURE: $(uname -m)"
                 exit 1
@@ -54,12 +49,8 @@ runs:
             esac
           elif [[ "$RUNNER_OS" = "macOS" ]]; then
             case "$(uname -m)" in
-              x86_64)
-                TOIT_FILE=toit-macos-x64.tar.gz
-                ;;
-              arm64)
-                TOIT_FILE=toit-macos-aarch64.tar.gz
-                ;;
+              x86_64) TOIT_FILE=toit-macos-x64.tar.gz ;;
+              arm64)  TOIT_FILE=toit-macos-aarch64.tar.gz ;;
               *)
                 echo "UNSUPPORTED ARCHITECTURE: $(uname -m)"
                 exit 1
@@ -74,15 +65,9 @@ runs:
         else
           if [[ "$RUNNER_OS" = "Linux" ]]; then
             case "$(uname -m)" in
-              x86_64)
-                TOIT_FILE=toit-linux.tar.gz
-                ;;
-              armv7l)
-                TOIT_FILE=toit-rpi.tar.gz
-                ;;
-              aarch64)
-                TOIT_FILE=toit-aarch64.tar.gz
-                ;;
+              x86_64)  TOIT_FILE=toit-linux.tar.gz;;
+              armv7l)  TOIT_FILE=toit-rpi.tar.gz;;
+              aarch64) TOIT_FILE=toit-aarch64.tar.gz;;
               *)
                 echo "UNSUPPORTED ARCHITECTURE: $(uname -m)"
                 exit 1
