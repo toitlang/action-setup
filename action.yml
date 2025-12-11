@@ -167,7 +167,7 @@ runs:
         fi
 
         if [ -z "$TOIT_BIN" ]; then
-          echo "TOIT binary not found in toit/bin" >&2
+          echo "Toit binary not found in toit/bin" >&2
           exit 1
         fi
 

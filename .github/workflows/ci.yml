@@ -15,7 +15,17 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        version: [v2.0.0-alpha.130, v2.0.0-alpha.164, v2.0.0-alpha.189, latest, ""]
+        include:
+          - version: v2.0.0-alpha.130
+            is_legacy: true
+          - version: v2.0.0-alpha.164
+            is_legacy: true
+          - version: v2.0.0-alpha.189
+            is_legacy: false
+          - version: latest
+            is_legacy: false
+          - version: ""
+            is_legacy: false
 
     runs-on: ${{ matrix.os }}
 
@@ -36,25 +46,25 @@ jobs:
         uses: ./
 
       - name: Test Toit in Path
-        if: ${{ matrix.version != 'v2.0.0-alpha.130' && matrix.version != 'v2.0.0-alpha.164' }}
+        if: ${{ matrix.is_legacy != true }}
         shell: bash
         run: |
           toit --version
 
       - name: Test Toit in Path - native shell
-        if: ${{ matrix.version != 'v2.0.0-alpha.130' && matrix.version != 'v2.0.0-alpha.164' }}
+        if: ${{ matrix.is_legacy != true }}
         run: |
           toit --version
 
       - name: Test legacy Toit commands in Path
-        if: ${{ matrix.version == 'v2.0.0-alpha.130' || matrix.version == 'v2.0.0-alpha.164' }}
+        if: ${{ matrix.is_legacy == true }}
         shell: bash
         run: |
           toit.run --version
           toit.pkg --version
 
       - name: Test legacy Toit commands in Path - native shell
-        if: ${{ matrix.version == 'v2.0.0-alpha.130' || matrix.version == 'v2.0.0-alpha.164' }}
+        if: ${{ matrix.is_legacy == true }}
         run: |
           toit.run --version
           toit.pkg --version
