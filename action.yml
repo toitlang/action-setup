@@ -147,5 +147,30 @@ runs:
       shell: bash
       run: |
         cd '${{ steps.tmp-dir.outputs.TOIT_INSTALL_DIR }}'
-        # We use 'sed' as some version files had a trailing space.
-        echo "TOIT_VERSION=$(sed 's/ $//' toit/VERSION)" >> $GITHUB_OUTPUT
+        # Prefer a VERSION file if present.
+        if [ -f "toit/VERSION" ]; then
+          echo "TOIT_VERSION=$(sed 's/[[:space:]]*$//' toit/VERSION)" >> $GITHUB_OUTPUT
+          exit 0
+        fi
+
+        # Detect executable suffix on Windows.
+        SUFFIX=""
+        if [[ "$RUNNER_OS" == "Windows" ]]; then
+          SUFFIX=".exe"
+        fi
+
+        # Prefer exact name; otherwise, pick the first matching executable in toit/bin.
+        if [ -x "toit/bin/toit$SUFFIX" ]; then
+          TOIT_BIN="toit/bin/toit$SUFFIX"
+        else
+          TOIT_BIN="$(find "toit/bin" -maxdepth 1 -type f -name "toit*${SUFFIX}" | head -n1)"
+        fi
+
+        if [ -z "$TOIT_BIN" ]; then
+          echo "Toit binary not found in toit/bin" >&2
+          exit 1
+        fi
+
+        # 'toit version' prints something like 'v2.0.0-alpha.189' on the first line.
+        VERSION_OUT="$($TOIT_BIN version | head -n1 | sed 's/[[:space:]]*$//')"
+        echo "TOIT_VERSION=$VERSION_OUT" >> $GITHUB_OUTPUT
