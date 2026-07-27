@@ -31,7 +31,6 @@ runs:
       id: setup_constants
       run: |
         TOIT_VERSION=${{ inputs.toit-version }}
-        TOIT_FALLBACK_FILE=
 
         ASSETS_NAMING_THRESHOLD_VERSION=v2.0.0-alpha.164
 
@@ -94,7 +93,7 @@ runs:
         fi
 
         echo "TOIT_URL=$TOIT_RELEASE_URL/$TOIT_FILE" >> "$GITHUB_OUTPUT"
-        if [[ -n "$TOIT_FALLBACK_FILE" ]]; then
+        if [[ "$RUNNER_OS" = "macOS" && -n "${TOIT_FALLBACK_FILE:-}" ]]; then
           echo "TOIT_FALLBACK_URL=$TOIT_RELEASE_URL/$TOIT_FALLBACK_FILE" >> \
             "$GITHUB_OUTPUT"
         fi
@@ -134,8 +133,13 @@ runs:
         INSTALLED_TOIT_URL=$TOIT_URL
         if ! curl --fail --location --retry 3 --show-error \
             --output "$TOIT_FILE" "$TOIT_URL"; then
-          if [[ -z "$TOIT_FALLBACK_URL" ]]; then
+          if [[ "$RUNNER_OS" != "macOS" ]]; then
             echo "Could not download Toit from $TOIT_URL" >&2
+            exit 1
+          fi
+
+          if [[ -z "$TOIT_FALLBACK_URL" ]]; then
+            echo "No fallback URL is available for macOS" >&2
             exit 1
           fi
 
