@@ -114,3 +114,75 @@ jobs:
             echo "URL is not a valid URL"
             exit 1
           fi
+
+          if [[ -n "${{ steps.setup1.outputs.qemu-version }}${{ steps.setup2.outputs.qemu-version }}" ]]; then
+            echo "QEMU was installed without a qemu-version"
+            exit 1
+          fi
+
+          if [[ -n "${QEMU_SYSTEM_XTENSA:-}${QEMU_SYSTEM_RISCV32:-}" ]]; then
+            echo "QEMU environment variables were set without a qemu-version"
+            exit 1
+          fi
+
+  qemu:
+    name: QEMU (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-x86_64
+            runner: ubuntu-22.04
+          - platform: linux-aarch64
+            runner: ubuntu-22.04-arm
+          - platform: windows-x86_64
+            runner: windows-2022
+          - platform: macos-x86_64
+            runner: macos-15-intel
+          - platform: macos-aarch64
+            runner: macos-15
+
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Toit and latest QEMU
+        id: setup
+        uses: ./
+        with:
+          qemu-version: latest
+
+      - name: Test QEMU installation
+        shell: bash
+        env:
+          EXPECTED_QEMU_PLATFORM: ${{ matrix.platform }}
+          EXPECTED_QEMU_VERSION: v9.2.2-toitlang.1
+          QEMU_INSTALL_DIR_OUTPUT: ${{ steps.setup.outputs.qemu-install-dir }}
+          QEMU_SYSTEM_RISCV32_OUTPUT: ${{ steps.setup.outputs.qemu-system-riscv32 }}
+          QEMU_SYSTEM_XTENSA_OUTPUT: ${{ steps.setup.outputs.qemu-system-xtensa }}
+          QEMU_URL: ${{ steps.setup.outputs.qemu-url }}
+          QEMU_VERSION: ${{ steps.setup.outputs.qemu-version }}
+        run: |
+          test "$QEMU_VERSION" = "$EXPECTED_QEMU_VERSION"
+          test "$QEMU_SYSTEM_XTENSA" = "$QEMU_SYSTEM_XTENSA_OUTPUT"
+          test "$QEMU_SYSTEM_RISCV32" = "$QEMU_SYSTEM_RISCV32_OUTPUT"
+          test -x "$QEMU_SYSTEM_XTENSA"
+          test -x "$QEMU_SYSTEM_RISCV32"
+          test -d "$QEMU_INSTALL_DIR_OUTPUT"
+          test "$(tr -d '\r\n' < "$QEMU_INSTALL_DIR_OUTPUT/VERSION")" = \
+            "$EXPECTED_QEMU_VERSION"
+          [[ "$QEMU_URL" == */qemu-toit-${EXPECTED_QEMU_VERSION}-${EXPECTED_QEMU_PLATFORM}.* ]]
+
+          "$QEMU_SYSTEM_XTENSA" --version |
+            grep -Fq "$EXPECTED_QEMU_VERSION"
+          "$QEMU_SYSTEM_RISCV32" --version |
+            grep -Fq "$EXPECTED_QEMU_VERSION"
+          "$QEMU_SYSTEM_XTENSA" -M help | grep -q esp32s3
+          "$QEMU_SYSTEM_RISCV32" -M help | grep -q esp32c3
+
+      - name: Test QEMU in native shell PATH
+        run: |
+          qemu-system-xtensa --version
+          qemu-system-riscv32 --version
