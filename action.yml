@@ -1,5 +1,5 @@
 name: "Setup Toit"
-description: "A GitHub Action to set up Toit."
+description: "A GitHub Action to set up Toit and optionally the Toit QEMU fork."
 branding:
   icon: "play-circle"
   color: "yellow"
@@ -8,6 +8,8 @@ inputs:
   toit-version:
     description: "The version to install. Installs the latest version if not specified."
     default: "latest"
+  qemu-version:
+    description: "The Toit QEMU release to install. QEMU is not installed if omitted. Use 'latest' for the latest release."
 
 outputs:
   toit-url:
@@ -22,6 +24,21 @@ outputs:
   toit-version:
     description: "The version of Toit installed."
     value: ${{ steps.toit_version.outputs.TOIT_VERSION }}
+  qemu-url:
+    description: "The URL to the installed Toit QEMU archive."
+    value: ${{ steps.qemu_constants.outputs.QEMU_URL }}
+  qemu-install-dir:
+    description: "The directory where Toit QEMU is installed."
+    value: ${{ steps.qemu_metadata.outputs.QEMU_INSTALL_DIR }}
+  qemu-version:
+    description: "The Toit QEMU release installed."
+    value: ${{ steps.qemu_constants.outputs.QEMU_VERSION }}
+  qemu-system-xtensa:
+    description: "The path to qemu-system-xtensa."
+    value: ${{ steps.qemu_metadata.outputs.QEMU_SYSTEM_XTENSA }}
+  qemu-system-riscv32:
+    description: "The path to qemu-system-riscv32."
+    value: ${{ steps.qemu_metadata.outputs.QEMU_SYSTEM_RISCV32 }}
 
 runs:
   using: "composite"
@@ -91,6 +108,68 @@ runs:
           echo "TOIT_URL=https://github.com/toitlang/toit/releases/download/$TOIT_VERSION/$TOIT_FILE" >> $GITHUB_OUTPUT
         fi
 
+    - name: Setup QEMU constants
+      if: ${{ inputs.qemu-version != '' }}
+      id: qemu_constants
+      shell: bash
+      env:
+        INPUT_QEMU_VERSION: ${{ inputs.qemu-version }}
+      run: |
+        QEMU_VERSION=$INPUT_QEMU_VERSION
+        if [[ "$QEMU_VERSION" == "latest" ]]; then
+          latest_url=$(curl --fail --silent --show-error --location \
+            --output /dev/null --write-out '%{url_effective}' \
+            https://github.com/toitlang/qemu/releases/latest)
+          latest_url=${latest_url%/}
+          QEMU_VERSION=${latest_url##*/}
+          if [[ -z "$QEMU_VERSION" || "$QEMU_VERSION" == "latest" ]]; then
+            echo "Could not resolve the latest Toit QEMU release" >&2
+            exit 1
+          fi
+        fi
+
+        if [[ ! "$QEMU_VERSION" =~ ^v[0-9A-Za-z][0-9A-Za-z._-]*$ ]]; then
+          echo "Invalid Toit QEMU release: $QEMU_VERSION" >&2
+          exit 1
+        fi
+
+        case "$RUNNER_OS-$RUNNER_ARCH" in
+          Linux-X64)
+            QEMU_PLATFORM=linux-x86_64
+            QEMU_EXTENSION=tar.gz
+            ;;
+          Linux-ARM64)
+            QEMU_PLATFORM=linux-aarch64
+            QEMU_EXTENSION=tar.gz
+            ;;
+          macOS-X64)
+            QEMU_PLATFORM=macos-x86_64
+            QEMU_EXTENSION=tar.gz
+            ;;
+          macOS-ARM64)
+            QEMU_PLATFORM=macos-aarch64
+            QEMU_EXTENSION=tar.gz
+            ;;
+          Windows-X64)
+            QEMU_PLATFORM=windows-x86_64
+            QEMU_EXTENSION=zip
+            ;;
+          *)
+            echo "UNSUPPORTED QEMU RUNNER: $RUNNER_OS-$RUNNER_ARCH" >&2
+            exit 1
+            ;;
+        esac
+
+        QEMU_PACKAGE=qemu-toit-${QEMU_VERSION}-${QEMU_PLATFORM}
+        QEMU_FILE=${QEMU_PACKAGE}.${QEMU_EXTENSION}
+        QEMU_RELEASE_URL=https://github.com/toitlang/qemu/releases/download/${QEMU_VERSION}
+
+        echo "QEMU_VERSION=$QEMU_VERSION" >> "$GITHUB_OUTPUT"
+        echo "QEMU_PACKAGE=$QEMU_PACKAGE" >> "$GITHUB_OUTPUT"
+        echo "QEMU_FILE=$QEMU_FILE" >> "$GITHUB_OUTPUT"
+        echo "QEMU_URL=$QEMU_RELEASE_URL/$QEMU_FILE" >> "$GITHUB_OUTPUT"
+        echo "QEMU_CHECKSUMS_URL=$QEMU_RELEASE_URL/SHA256SUMS" >> "$GITHUB_OUTPUT"
+
     - name: Create temporary directory
       # Linux and macOS.
       if: startsWith(runner.os, 'Linux') || startsWith(runner.os, 'macOS')
@@ -128,6 +207,87 @@ runs:
         # Extracts the tar.gz leaving a 'toit' directory containing 'bin', 'tools' and 'lib' directory.
         tar x -zf toit-*.tar.gz
 
+    - name: Download and verify QEMU
+      if: ${{ inputs.qemu-version != '' }}
+      shell: bash
+      env:
+        QEMU_CHECKSUMS_URL: ${{ steps.qemu_constants.outputs.QEMU_CHECKSUMS_URL }}
+        QEMU_FILE: ${{ steps.qemu_constants.outputs.QEMU_FILE }}
+        QEMU_URL: ${{ steps.qemu_constants.outputs.QEMU_URL }}
+        TOIT_INSTALL_DIR: ${{ steps.tmp-dir.outputs.TOIT_INSTALL_DIR }}
+      run: |
+        cd "$TOIT_INSTALL_DIR"
+        curl --fail --location --retry 3 --show-error \
+          --output "$QEMU_FILE" "$QEMU_URL"
+        curl --fail --location --retry 3 --show-error \
+          --output SHA256SUMS "$QEMU_CHECKSUMS_URL"
+
+        expected=$(awk -v file="$QEMU_FILE" '$2 == file { print $1 }' SHA256SUMS)
+        if [[ ! "$expected" =~ ^[0-9a-fA-F]{64}$ ]]; then
+          echo "No valid checksum found for $QEMU_FILE" >&2
+          exit 1
+        fi
+
+        if command -v sha256sum >/dev/null 2>&1; then
+          actual=$(sha256sum "$QEMU_FILE" | awk '{ print $1 }')
+        elif command -v shasum >/dev/null 2>&1; then
+          actual=$(shasum -a 256 "$QEMU_FILE" | awk '{ print $1 }')
+        else
+          echo "No SHA-256 checksum tool is available" >&2
+          exit 1
+        fi
+
+        if [[ "$actual" != "$expected" ]]; then
+          echo "Checksum verification failed for $QEMU_FILE" >&2
+          exit 1
+        fi
+
+    - name: Extract QEMU
+      if: ${{ inputs.qemu-version != '' && runner.os != 'Windows' }}
+      shell: bash
+      env:
+        QEMU_FILE: ${{ steps.qemu_constants.outputs.QEMU_FILE }}
+        TOIT_INSTALL_DIR: ${{ steps.tmp-dir.outputs.TOIT_INSTALL_DIR }}
+      run: |
+        tar -C "$TOIT_INSTALL_DIR" -xzf "$TOIT_INSTALL_DIR/$QEMU_FILE"
+
+    - name: Extract QEMU
+      if: ${{ inputs.qemu-version != '' && runner.os == 'Windows' }}
+      shell: powershell
+      env:
+        QEMU_FILE: ${{ steps.qemu_constants.outputs.QEMU_FILE }}
+        TOIT_INSTALL_DIR: ${{ steps.tmp-dir.outputs.TOIT_INSTALL_DIR }}
+      run: |
+        Expand-Archive `
+          -LiteralPath (Join-Path $env:TOIT_INSTALL_DIR $env:QEMU_FILE) `
+          -DestinationPath $env:TOIT_INSTALL_DIR
+
+    - name: Set QEMU outputs
+      if: ${{ inputs.qemu-version != '' }}
+      id: qemu_metadata
+      shell: bash
+      env:
+        QEMU_PACKAGE: ${{ steps.qemu_constants.outputs.QEMU_PACKAGE }}
+        TOIT_INSTALL_DIR: ${{ steps.tmp-dir.outputs.TOIT_INSTALL_DIR }}
+      run: |
+        QEMU_INSTALL_DIR=$TOIT_INSTALL_DIR/$QEMU_PACKAGE
+        if [[ "$RUNNER_OS" == "Windows" ]]; then
+          suffix=.exe
+        else
+          suffix=
+        fi
+
+        QEMU_SYSTEM_XTENSA=$QEMU_INSTALL_DIR/bin/qemu-system-xtensa${suffix}
+        QEMU_SYSTEM_RISCV32=$QEMU_INSTALL_DIR/bin/qemu-system-riscv32${suffix}
+        test -x "$QEMU_SYSTEM_XTENSA"
+        test -x "$QEMU_SYSTEM_RISCV32"
+
+        echo "QEMU_INSTALL_DIR=$QEMU_INSTALL_DIR" >> "$GITHUB_OUTPUT"
+        echo "QEMU_SYSTEM_XTENSA=$QEMU_SYSTEM_XTENSA" >> "$GITHUB_OUTPUT"
+        echo "QEMU_SYSTEM_RISCV32=$QEMU_SYSTEM_RISCV32" >> "$GITHUB_OUTPUT"
+        echo "QEMU_SYSTEM_XTENSA=$QEMU_SYSTEM_XTENSA" >> "$GITHUB_ENV"
+        echo "QEMU_SYSTEM_RISCV32=$QEMU_SYSTEM_RISCV32" >> "$GITHUB_ENV"
+
     - name: Add to PATH
       # Linux and macOS.
       if : startsWith(runner.os, 'Linux') || startsWith(runner.os, 'macOS')
@@ -141,6 +301,19 @@ runs:
       if: startsWith(runner.os, 'Windows')
       run: |
         echo "${{ steps.tmp-dir.outputs.TOIT_INSTALL_DIR }}/toit/bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+
+    - name: Add QEMU to PATH
+      if: ${{ inputs.qemu-version != '' && runner.os != 'Windows' }}
+      shell: bash
+      run: |
+        echo "${{ steps.qemu_metadata.outputs.QEMU_INSTALL_DIR }}/bin" >> "$GITHUB_PATH"
+
+    - name: Add QEMU to PATH
+      if: ${{ inputs.qemu-version != '' && runner.os == 'Windows' }}
+      shell: powershell
+      run: |
+        "${{ steps.qemu_metadata.outputs.QEMU_INSTALL_DIR }}/bin" |
+          Out-File -FilePath $env:GITHUB_PATH -Append
 
     - name: Set Toit version output
       id: toit_version
