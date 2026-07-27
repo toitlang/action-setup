@@ -14,7 +14,7 @@ inputs:
 outputs:
   toit-url:
     description: "The URL to the Toit tar.gz file."
-    value: ${{ steps.setup_constants.outputs.TOIT_URL }}
+    value: ${{ steps.download_toit.outputs.TOIT_URL }}
   toit-install-dir:
     description: "The directory where Toit is installed."
     value: ${{ steps.tmp-dir.outputs.TOIT_INSTALL_DIR }}
@@ -73,6 +73,7 @@ runs:
                 exit 1
                 ;;
             esac
+            TOIT_FALLBACK_FILE=toit-macos.tar.gz
           elif [[ "$RUNNER_OS" = "Windows" ]]; then
             TOIT_FILE=toit-windows-x64.tar.gz
           else
@@ -103,9 +104,15 @@ runs:
         echo "TOIT_FILE=$TOIT_FILE" >> $GITHUB_OUTPUT
 
         if [[ $TOIT_VERSION = latest ]]; then
-          echo "TOIT_URL=https://github.com/toitlang/toit/releases/latest/download/$TOIT_FILE" >> $GITHUB_OUTPUT
+          TOIT_RELEASE_URL=https://github.com/toitlang/toit/releases/latest/download
         else
-          echo "TOIT_URL=https://github.com/toitlang/toit/releases/download/$TOIT_VERSION/$TOIT_FILE" >> $GITHUB_OUTPUT
+          TOIT_RELEASE_URL=https://github.com/toitlang/toit/releases/download/$TOIT_VERSION
+        fi
+
+        echo "TOIT_URL=$TOIT_RELEASE_URL/$TOIT_FILE" >> "$GITHUB_OUTPUT"
+        if [[ "$RUNNER_OS" = "macOS" && -n "${TOIT_FALLBACK_FILE:-}" ]]; then
+          echo "TOIT_FALLBACK_URL=$TOIT_RELEASE_URL/$TOIT_FALLBACK_FILE" >> \
+            "$GITHUB_OUTPUT"
         fi
 
     - name: Setup QEMU constants
@@ -194,11 +201,34 @@ runs:
         echo TOIT_INSTALL_DIR=$TOIT_INSTALL_DIR >> $GITHUB_OUTPUT
 
     - name: Download Toit
+      id: download_toit
       shell: bash
+      env:
+        TOIT_FALLBACK_URL: ${{ steps.setup_constants.outputs.TOIT_FALLBACK_URL }}
+        TOIT_FILE: ${{ steps.setup_constants.outputs.TOIT_FILE }}
+        TOIT_URL: ${{ steps.setup_constants.outputs.TOIT_URL }}
       run: |
         cd '${{ steps.tmp-dir.outputs.TOIT_INSTALL_DIR }}'
-        # Downloads the tar.gz file.
-        curl -L -o ${{ steps.setup_constants.outputs.TOIT_FILE }} ${{ steps.setup_constants.outputs.TOIT_URL }}
+        INSTALLED_TOIT_URL=$TOIT_URL
+        if ! curl --fail --location --retry 3 --show-error \
+            --output "$TOIT_FILE" "$TOIT_URL"; then
+          if [[ "$RUNNER_OS" != "macOS" ]]; then
+            echo "Could not download Toit from $TOIT_URL" >&2
+            exit 1
+          fi
+
+          if [[ -z "$TOIT_FALLBACK_URL" ]]; then
+            echo "No fallback URL is available for macOS" >&2
+            exit 1
+          fi
+
+          echo "Falling back to $TOIT_FALLBACK_URL" >&2
+          curl --fail --location --retry 3 --show-error \
+            --output "$TOIT_FILE" "$TOIT_FALLBACK_URL"
+          INSTALLED_TOIT_URL=$TOIT_FALLBACK_URL
+        fi
+
+        echo "TOIT_URL=$INSTALLED_TOIT_URL" >> "$GITHUB_OUTPUT"
 
     - name: Extract Toit
       shell: bash
